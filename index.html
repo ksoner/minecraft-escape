@@ -41,6 +41,18 @@
 </head>
 <body>
 <div id="startScreen">
+  <p style="max-width: 600px; font-size: 1rem; text-align: center; margin: 20px auto;">
+    Welcome to <strong>Lale's Minecraft Escape</strong>! 🏠💎<br><br>
+    <u>How to play:</u><br>
+    - Use <b>Arrow Keys</b> to move<br>
+    - Press <b>B</b> to build blocks outside<br>
+    - Press <b>A</b> to change block color<br>
+    - Press <b>E</b> near a door to enter/exit a house<br>
+    - Press <b>Space</b> to fight zombies<br>
+    - Touch piggies to collect food<br>
+    - Open treasure chests to discover surprises!<br><br>
+    Can you survive and decorate your world?
+  </p>
   <div>Lale's Minecraft Escape</div>
   <button id="startButton">Start Game</button>
 </div>
@@ -154,7 +166,7 @@ function drawInterior() {
   ctx.fillRect(colorX, 10, 30, 30);
   ctx.strokeStyle = 'black';
   ctx.strokeRect(colorX, 10, 30, 30);
-  ctx.fillText('Use A to change color, B to build, E near door to exit', 10, 60);
+  ctx.fillText('Arrow Keys: Move | A: Change Color | B: Build Block | E: Exit | Space: Fight', 10, 60);
   ctx.fillText(`Inventory: ${inventory}`, 10, 90);
 }
 
