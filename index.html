@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lale's Minecraft Escape</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+      background: url('your-uploaded-image.jpg') center center / cover no-repeat;
+    }
+    #gameCanvas {
+      display: block;
+    }
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: white;
+      font-size: 2rem;
+      z-index: 10;
+    }
+    #startButton {
+      padding: 1rem 2rem;
+      font-size: 1.5rem;
+      cursor: pointer;
+      background: orange;
+      border: none;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+<div id="startScreen">
+  <div>Lale's Minecraft Escape</div>
+  <button id="startButton">Start Game</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let keys = {};
+let food = 0;
+let gameStarted = false;
+let inHouse = false;
+let selectedColor = 'red';
+const houses = [];
+const decorations = [];
+let chest = null;
+let chestLoot = [];
+let inventory = 0;
+
+const player = {
+  x: 100,
+  y: 300,
+  size: 40,
+  color: 'blue',
+  dx: 0,
+  dy: 0,
+  face: '^_^'
+};
+
+const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'gray'];
+const piggies = Array.from({ length: 5 }, () => ({
+  x: Math.random() * canvas.width,
+  y: Math.random() * canvas.height,
+  size: 30,
+  color: 'pink',
+  face: 'oink'
+}));
+
+const zombies = Array.from({ length: 3 }, () => ({
+  x: Math.random() * canvas.width,
+  y: Math.random() * canvas.height,
+  size: 50,
+  color: 'green',
+  face: '>_<',
+  alive: true,
+  stuckCounter: 0
+}));
+
+function drawCharacter(x, y, size, color, face = ':)') {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, size, size);
+  ctx.fillStyle = 'black';
+  ctx.font = `${Math.floor(size / 3)}px sans-serif`;
+  ctx.fillText(face, x + 4, y + size / 1.5);
+}
+
+function drawHouse(x, y) {
+  ctx.fillStyle = 'brown';
+  ctx.fillRect(x, y, 60, 60);
+  ctx.fillStyle = 'black';
+  ctx.fillRect(x + 20, y + 30, 20, 30);
+}
+
+function drawInterior() {
+  ctx.fillStyle = '#fcead1';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#6d4c41';
+  ctx.fillRect(canvas.width - 60, canvas.height / 2 - 40, 40, 80);
+
+  decorations.forEach(d => {
+    ctx.fillStyle = d.color;
+    ctx.fillRect(d.x, d.y, 40, 40);
+  });
+
+  if (chest && !chest.opened) {
+    ctx.fillStyle = 'goldenrod';
+    ctx.fillRect(chest.x, chest.y, chest.size, chest.size);
+    ctx.fillStyle = 'black';
+    ctx.fillText('?', chest.x + 12, chest.y + 28);
+  }
+
+  if (chest && chest.opened) {
+    chestLoot.forEach(loot => {
+      if (loot.type === 'item' && !loot.collected) {
+        ctx.fillStyle = loot.color;
+        ctx.fillRect(loot.x, loot.y, loot.size, loot.size);
+        if (Math.abs(player.x - loot.x) < 30 && Math.abs(player.y - loot.y) < 30) {
+          loot.collected = true;
+          inventory++;
+        }
+      } else if (loot.type === 'piggy' && !loot.spawned) {
+        loot.spawned = true;
+        piggies.push({ x: loot.x, y: loot.y, size: loot.size, color: loot.color, face: loot.face });
+      }
+    });
+    ctx.fillStyle = 'gold';
+    ctx.fillText(`💎 ${inventory}`, chest.x + 10, chest.y + 28);
+  }
+
+  drawCharacter(player.x, player.y, player.size, player.color, player.face);
+
+  if (chest && !chest.opened && Math.abs(player.x - chest.x) < 40 && Math.abs(player.y - chest.y) < 40) {
+    chest.opened = true;
+  }
+
+  ctx.fillStyle = 'black';
+  const colorX = 10;
+  ctx.fillStyle = selectedColor;
+  ctx.fillRect(colorX, 10, 30, 30);
+  ctx.strokeStyle = 'black';
+  ctx.strokeRect(colorX, 10, 30, 30);
+  ctx.fillText('Use A to change color, B to build, E near door to exit', 10, 60);
+  ctx.fillText(`Inventory: ${inventory}`, 10, 90);
+}
+
+function keepInBounds(entity) {
+  entity.x = Math.max(0, Math.min(canvas.width - entity.size, entity.x));
+  entity.y = Math.max(0, Math.min(canvas.height - entity.size, entity.y));
+}
+
+function isColliding(a, b) {
+  return (
+    a.x < b.x + 60 &&
+    a.x + a.size > b.x &&
+    a.y < b.y + 60 &&
+    a.y + a.size > b.y
+  );
+}
+
+function update() {
+  if (!gameStarted) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (inHouse) {
+    if (keys['ArrowUp']) player.y -= 3;
+    if (keys['ArrowDown']) player.y += 3;
+    if (keys['ArrowLeft']) player.x -= 3;
+    if (keys['ArrowRight']) player.x += 3;
+
+    if (keys['a']) {
+      let index = colors.indexOf(selectedColor);
+      selectedColor = colors[(index + 1) % colors.length];
+      keys['a'] = false;
+    }
+
+    if (keys['b']) {
+      decorations.push({ x: player.x, y: player.y, color: selectedColor });
+      keys['b'] = false;
+    }
+
+    if ((keys['e']) && player.x > canvas.width - 100 && player.y > canvas.height / 2 - 80 && player.y < canvas.height / 2 + 40) {
+      inHouse = false;
+      player.x -= 100;
+      decorations.length = 0;
+    }
+
+    keepInBounds(player);
+    drawInterior();
+    requestAnimationFrame(update);
+    return;
+  }
+
+  if (keys['ArrowUp']) player.y -= 3;
+  if (keys['ArrowDown']) player.y += 3;
+  if (keys['ArrowLeft']) player.x -= 3;
+  if (keys['ArrowRight']) player.x += 3;
+  keepInBounds(player);
+
+  drawCharacter(player.x, player.y, player.size, player.color, player.face);
+
+  piggies.forEach((pig, index) => {
+    pig.x += Math.random() * 4 - 2;
+    pig.y += Math.random() * 4 - 2;
+    drawCharacter(pig.x, pig.y, pig.size, pig.color, pig.face);
+    if (Math.abs(player.x - pig.x) < 30 && Math.abs(player.y - pig.y) < 30) {
+      piggies.splice(index, 1);
+      food++;
+    }
+  });
+
+  zombies.forEach(zombie => {
+    if (!zombie.alive) return;
+    drawCharacter(zombie.x, zombie.y, zombie.size, zombie.color, zombie.face);
+    let dx = player.x - zombie.x;
+    let dy = player.y - zombie.y;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+    const speed = 1;
+    if (dist > 1) {
+      zombie.x += (dx / dist) * speed;
+      zombie.y += (dy / dist) * speed;
+    }
+    if (keys[' '] && dist < 50) {
+      zombie.alive = false;
+    }
+    if (Math.abs(player.x - zombie.x) < 40 && Math.abs(player.y - zombie.y) < 40) {
+      player.x -= 10;
+      player.y -= 10;
+    }
+  });
+
+  houses.forEach(h => {
+    drawHouse(h.x, h.y);
+    if (isColliding(player, h)) {
+      inHouse = true;
+      player.x = 60;
+      player.y = 60;
+      decorations.length = 0;
+      chest = { x: 400, y: 200, size: 40, opened: false };
+      zombies.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: 50,
+        color: 'green',
+        face: '>_<',
+        alive: true,
+        stuckCounter: 0
+      });
+      chestLoot = Array.from({ length: Math.floor(Math.random() * 2) + 1 }, () => {
+        const typeChance = Math.random();
+        if (typeChance < 0.5) {
+          return { x: chest.x + Math.random() * 60 - 30, y: chest.y + Math.random() * 60, size: 20, type: 'item', color: colors[Math.floor(Math.random() * colors.length)], collected: false };
+        } else {
+          return { x: chest.x + Math.random() * 60 - 30, y: chest.y + Math.random() * 60, size: 30, type: 'piggy', color: 'pink', face: 'oink', spawned: false };
+        }
+      });
+    }
+  });
+
+  ctx.fillStyle = 'black';
+  ctx.fillText(`Food: ${food}`, 10, 20);
+  requestAnimationFrame(update);
+}
+
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (!inHouse && (e.key === 'b' || e.key === 'B')) {
+    houses.push({ x: player.x + 50, y: player.y });
+  }
+});
+
+document.addEventListener('keyup', e => keys[e.key] = false);
+
+document.getElementById('startButton').addEventListener('click', () => {
+  document.getElementById('startScreen').style.display = 'none';
+  gameStarted = true;
+  update();
+});
+</script>
+</body>
+</html>
